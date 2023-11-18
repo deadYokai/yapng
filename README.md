@@ -7,7 +7,7 @@
   <h3 align="center">Yet Another PNGTuber</h3>
 
   <p align="center">
-    Alternative to PNGTuber+ by kaiakairos
+    Alternative to <a href="https://kaiakairos.itch.io/pngtuber-plus" target="_blank">**PNGTuber+** by **kaiakairos**</a>
     <br/>
     <br/>
     <a href="https://github.com/deadYokai/yapng/issues">Report Bug</a>
