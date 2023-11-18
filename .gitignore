@@ -1,1 +1,4 @@
 build/
+savedata/
+
+assets/save.json
