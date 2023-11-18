@@ -1,7 +1,7 @@
 <br/>
 <p align="center">
   <a href="https://github.com/deadYokai/yapng">
-    <img src="images/pic.png" alt="Logo" width="80" height="80">
+    <img src="images/pic.png" alt="Logo" width="256" height="256">
   </a>
 
   <h3 align="center">Yet Another PNGTuber</h3>
