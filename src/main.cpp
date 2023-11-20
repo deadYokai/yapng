@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <cstdio>
 #include <iostream>
 #include <SDL.h>
 #include <SDL_main.h>
@@ -7,14 +8,17 @@
 #include <nlohmann/json.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <filesystem>
 #include "base64.hpp"
 
 using json = nlohmann::json;
 
 #ifndef SAVE_PATH
+// TODO: change to user config folder
 #define SAVE_PATH "../savedata/"
 #endif
 
+// Function for logging errors
 void SDL_Fail(const char* errText){
     char* err = (char*)SDL_GetError();
     if(err != NULL)
@@ -23,25 +27,51 @@ void SDL_Fail(const char* errText){
     exit(1);
 }
 
+void copyFile(const char* from, const char* to){
+
+    SDL_Log("Copying %s to %s", from, to);
+
+    char buf[BUFSIZ];
+    size_t size;
+
+    FILE* s = fopen(from, "r");
+    FILE* d = fopen(to, "w");
+
+    while(size = fread(buf, 1, BUFSIZ, s))
+        fwrite(buf, 1, size, d);
+
+    fclose(s);
+    fclose(d);
+}
+
 static bool app_quit = false;
 SDL_Renderer* renderer = nullptr;
 
 
 int main(int argc, char* argv[]){
 
+    // Check if SAVE_PATH exists or create
     struct stat info;
-
     if(stat(SAVE_PATH, &info) != 0)
         if (mkdir(SAVE_PATH, 0777) != 0)
             SDL_Fail("unable to create user data folder");
 
-    std::ifstream savefile("../assets/save.json");
+    // Open save file
+    // TODO: create entry in settings
+    const char* savepath = "../assets/save.json";
+    std::ifstream savefile(savepath);
+
+    if(!savefile.is_open())
+        SDL_Fail("cannot access to save file");
+
+    // Getting info from json (save file)
     json savedata;
     savefile >> savedata;
 
     for (json::iterator it = savedata.begin(); it != savedata.end(); ++it) {
         auto dat = *it;
 
+        // Check if encoded image exists in a save file
         if(dat["imageData"] == NULL)
             SDL_Fail("Unsopported save file");
 
@@ -54,19 +84,31 @@ int main(int argc, char* argv[]){
 
         auto outf = outp.substr(0, outp.find_last_of("/"));
 
-        SDL_Log("Decoding %s to %s", path, outp.c_str());
+
+        // Check if profile folder exists or create folder
         if(stat(outf.c_str(), &info) != 0)
             if (mkdir(outf.c_str(), 0777) != 0)
                 SDL_Fail("unable to create profile folder");
 
-        png.open(outp.c_str());
+        // Copy save file to profile dir if not exists
+        if(stat((outf+"/save.json").c_str(), &info) != 0)
+            copyFile(savepath, (outf+"/save.json").c_str());
 
-        if(!png.is_open())
-            SDL_Fail("Fail to write files");
+        // Decode file to profile dir if not exists
+        if(stat(outp.c_str(), &info) != 0){
 
-        std::string imgdat = dat["imageData"];
-        png << base64::from_base64(imgdat);
-        png.close();
+            // Write files to profile folder
+            SDL_Log("Decoding %s to %s", path, outp.c_str());
+            png.open(outp.c_str());
+
+            if(!png.is_open())
+                SDL_Fail("Fail to write files");
+
+            std::string imgdat = dat["imageData"];
+            png << base64::from_base64(imgdat);
+            png.close();
+        }
+
 
     }
 
