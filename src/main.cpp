@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <filesystem>
 #include "base64.hpp"
+#include <vector>
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -47,6 +49,20 @@ void copyFile(const char* from, const char* to){
 static bool app_quit = false;
 SDL_Renderer* renderer = nullptr;
 
+typedef struct Image{
+    int id;
+    SDL_Texture* img;
+    int size[2]; // width, height
+    int off[2];  // x, y
+    int zindex;
+    bool blink;
+    int talk;    // 0, 1, 2
+    int pid;     // parent id
+} Image;
+
+bool Image_zindex_cmp(const Image &a, const Image &b){
+    return a.zindex < b.zindex;
+}
 
 int main(int argc, char* argv[]){
 
@@ -67,6 +83,26 @@ int main(int argc, char* argv[]){
     // Getting info from json (save file)
     json savedata;
     savefile >> savedata;
+
+    std::vector<Image> img;
+    std::vector<Image>::iterator img_iter;
+
+
+    if (SDL_Init(SDL_INIT_EVERYTHING)){
+        SDL_Fail("");
+    }
+
+
+    SDL_Window* window = SDL_CreateWindow("Yet Another PNGTuber", 720, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_TRANSPARENT);
+    if (!window){
+        SDL_Fail("");
+    }
+
+
+    renderer = SDL_CreateRenderer(window, NULL, 0);
+    if (!renderer){
+        SDL_Fail("");
+    }
 
     for (json::iterator it = savedata.begin(); it != savedata.end(); ++it) {
         auto dat = *it;
@@ -110,17 +146,20 @@ int main(int argc, char* argv[]){
         }
 
 
+        SDL_Texture* a = IMG_LoadTexture(renderer, outp.c_str());
+
+        int w, h;
+        SDL_QueryTexture(a, NULL, NULL, &w, &h);
+
+        int pid = 0;
+        if(!dat["parentId"].is_null())
+            pid = dat["parentId"];
+
+        img.push_back({dat["identification"], a, w,h, 0,0, dat["zindex"], false, 0, pid});
+
     }
 
-    if (SDL_Init(SDL_INIT_EVERYTHING)){
-        SDL_Fail("");
-    }
-
-
-    SDL_Window* window = SDL_CreateWindow("Yet Another PNGTuber", 720, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_TRANSPARENT);
-    if (!window){
-        SDL_Fail("");
-    }
+    std::sort(img.begin(), img.end(), Image_zindex_cmp);
 
     SDL_ShowWindow(window);
     {
@@ -133,16 +172,6 @@ int main(int argc, char* argv[]){
             SDL_Log("This is a highdpi environment.");
         }
     }
-
-
-    renderer = SDL_CreateRenderer(window, NULL, 0);
-    if (!renderer){
-        SDL_Fail("");
-    }
-
-    // SDL_Texture* img = IMG_LoadTexture(renderer, "../assets/1.png");
-    // int w, h;
-    // SDL_QueryTexture(img, NULL, NULL, &w, &h);
 
     SDL_Log("Application started successfully!");
 
@@ -158,7 +187,10 @@ int main(int argc, char* argv[]){
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
-        // SDL_RenderTexture(renderer, img, NULL, NULL);
+        for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
+            Image a = *img_iter;
+            SDL_RenderTexture(renderer, a.img, NULL, NULL);
+        }
         SDL_RenderPresent(renderer);
 
     }
