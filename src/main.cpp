@@ -33,6 +33,18 @@ void SDL_Fail(const char* errText){
     exit(1);
 }
 
+int bp = 0;
+void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
+    if (additional_amount > 0) {
+        Uint8 *data = SDL_stack_alloc(Uint8, additional_amount);
+        if (data) {
+            SDL_GetAudioStreamData(stream, data, additional_amount);
+            std::cout << data << '\n';
+            SDL_stack_free(data);
+        }
+    }
+}
+
 std::vector<int> split(const std::string &s, char delimiter) {
     std::vector<int> tokens;
     std::string token;
@@ -192,19 +204,10 @@ int main(int argc, char* argv[]){
 
     std::sort(img.begin(), img.end(), Image_zindex_cmp);
 
-    SDL_AudioDeviceID recordingDeviceId = 0; // use default
-    SDL_AudioSpec desiredRecordingSpec;
+    const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
 
-    SDL_zero(desiredRecordingSpec);
-    desiredRecordingSpec.freq = 44100;
-    desiredRecordingSpec.format = AUDIO_S16;
-    desiredRecordingSpec.channels = 2;
-    desiredRecordingSpec.samples = 4096;
-    desiredRecordingSpec.callback = audioRecordingCallback;
-
-    if(SDL_GetNumAudioDevices(SDL_TRUE) < 1)
-        SDL_Fail(SDL_GetError());
-
+    SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, NULL);
+    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
 
     SDL_ShowWindow(window);
     {
@@ -232,7 +235,6 @@ int main(int argc, char* argv[]){
             break;
         }
 
-
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
@@ -240,7 +242,6 @@ int main(int argc, char* argv[]){
             SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
         }
         SDL_RenderPresent(renderer);
-
         SDL_Delay(15);
     }
 
