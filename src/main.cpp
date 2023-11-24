@@ -192,6 +192,20 @@ int main(int argc, char* argv[]){
 
     std::sort(img.begin(), img.end(), Image_zindex_cmp);
 
+    SDL_AudioDeviceID recordingDeviceId = 0; // use default
+    SDL_AudioSpec desiredRecordingSpec;
+
+    SDL_zero(desiredRecordingSpec);
+    desiredRecordingSpec.freq = 44100;
+    desiredRecordingSpec.format = AUDIO_S16;
+    desiredRecordingSpec.channels = 2;
+    desiredRecordingSpec.samples = 4096;
+    desiredRecordingSpec.callback = audioRecordingCallback;
+
+    if(SDL_GetNumAudioDevices(SDL_TRUE) < 1)
+        SDL_Fail(SDL_GetError());
+
+
     SDL_ShowWindow(window);
     {
         int width, height, bbwidth, bbheight;
@@ -227,6 +241,7 @@ int main(int argc, char* argv[]){
         }
         SDL_RenderPresent(renderer);
 
+        SDL_Delay(15);
     }
 
     SDL_DestroyRenderer(renderer);
