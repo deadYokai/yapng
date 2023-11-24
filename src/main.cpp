@@ -12,6 +12,7 @@
 #include "base64.hpp"
 #include <vector>
 #include <algorithm>
+#include <stdlib.h>
 
 using json = nlohmann::json;
 
@@ -20,14 +21,28 @@ using json = nlohmann::json;
 #define SAVE_PATH "../savedata/"
 #endif
 
+#ifdef WINDOW_FLAG_OPENGL
+#define RENDERER_FLAG SDL_WINDOW_OPENGL
+#else
+#define RENDERER_FLAG SDL_WINDOW_VULKAN
+#endif
+
 // Function for logging errors
 void SDL_Fail(const char* errText){
-    char* err = (char*)SDL_GetError();
-    if(err != NULL)
-        err = (char*)errText;
-    SDL_LogError(SDL_LOG_CATEGORY_CUSTOM, "%s", err);
+    SDL_LogError(SDL_LOG_CATEGORY_CUSTOM, "%s", errText);
     exit(1);
 }
+
+std::vector<int> split(const std::string &s, char delimiter) {
+    std::vector<int> tokens;
+    std::string token;
+    std::istringstream tokenStream(s);
+    while (getline(tokenStream, token, delimiter)) {
+        tokens.push_back(stoi(token));
+    }
+    return tokens;
+}
+
 
 void copyFile(const char* from, const char* to){
 
@@ -52,12 +67,11 @@ SDL_Renderer* renderer = nullptr;
 typedef struct Image{
     int id;
     SDL_Texture* img;
-    int size[2]; // width, height
-    int off[2];  // x, y
     int zindex;
     bool blink;
     int talk;    // 0, 1, 2
     int pid;     // parent id
+    SDL_FRect rect;
 } Image;
 
 bool Image_zindex_cmp(const Image &a, const Image &b){
@@ -89,27 +103,26 @@ int main(int argc, char* argv[]){
 
 
     if (SDL_Init(SDL_INIT_EVERYTHING)){
-        SDL_Fail("");
+        SDL_Fail(SDL_GetError());
     }
 
 
-    SDL_Window* window = SDL_CreateWindow("Yet Another PNGTuber", 720, 720, SDL_WINDOW_VULKAN | SDL_WINDOW_TRANSPARENT);
+    SDL_Window* window = SDL_CreateWindow("Yet Another PNGTuber", 720, 720, RENDERER_FLAG | SDL_WINDOW_TRANSPARENT);
     if (!window){
-        SDL_Fail("");
+        SDL_Fail(SDL_GetError());
     }
 
-
-    renderer = SDL_CreateRenderer(window, NULL, 0);
+    renderer = SDL_CreateRenderer(window, NULL, SDL_RENDERER_ACCELERATED);
     if (!renderer){
-        SDL_Fail("");
+        SDL_Fail(SDL_GetError());
     }
 
+    float scale = 0.7;
     for (json::iterator it = savedata.begin(); it != savedata.end(); ++it) {
         auto dat = *it;
 
-        // Check if encoded image exists in a save file
-        if(dat["imageData"] == NULL)
-            SDL_Fail("Unsopported save file");
+        if(dat["path"] == NULL)
+            SDL_Fail("unsupported or broken save file");
 
         auto spath = dat["path"].get_ref<const std::string &>();
         auto sspath = spath.substr(7, spath.length()-7);
@@ -119,7 +132,6 @@ int main(int argc, char* argv[]){
         outp.append(path);
 
         auto outf = outp.substr(0, outp.find_last_of("/"));
-
 
         // Check if profile folder exists or create folder
         if(stat(outf.c_str(), &info) != 0)
@@ -132,6 +144,10 @@ int main(int argc, char* argv[]){
 
         // Decode file to profile dir if not exists
         if(stat(outp.c_str(), &info) != 0){
+
+            // Check if encoded image exists in a save file
+            if(dat["imageData"] == NULL)
+                SDL_Fail("image data not found");
 
             // Write files to profile folder
             SDL_Log("Decoding %s to %s", path, outp.c_str());
@@ -146,16 +162,31 @@ int main(int argc, char* argv[]){
         }
 
 
+
+        SDL_FRect r;
         SDL_Texture* a = IMG_LoadTexture(renderer, outp.c_str());
 
         int w, h;
         SDL_QueryTexture(a, NULL, NULL, &w, &h);
 
+        auto ps = dat["pos"].get_ref<const std::string &>();
+        auto p = ps.substr(8, ps.length()-9);
+
+        std::vector<int> ipos = split(p, ',');
+
+        int new_x = w/2 - (w/2 * scale);
+        int new_y = abs(720-h)/2 - (abs(720-h)/2 * scale);
+
+        r.x = new_x;
+        r.y = new_y;
+        r.w = w * scale;
+        r.h = h * scale;
+
         int pid = 0;
         if(!dat["parentId"].is_null())
             pid = dat["parentId"];
 
-        img.push_back({dat["identification"], a, w,h, 0,0, dat["zindex"], false, 0, pid});
+        img.push_back({dat["identification"], a, dat["zindex"], false, 0, pid, r});
 
     }
 
@@ -166,6 +197,9 @@ int main(int argc, char* argv[]){
         int width, height, bbwidth, bbheight;
         SDL_GetWindowSize(window, &width, &height);
         SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
+#ifdef WINDOW_FLAG_OPENGL
+        SDL_Log("Using OpenGL window flag");
+#endif
         SDL_Log("Window size: %ix%i", width, height);
         SDL_Log("Backbuffer size: %ix%i", bbwidth, bbheight);
         if (width != bbwidth){
@@ -189,7 +223,7 @@ int main(int argc, char* argv[]){
         SDL_RenderClear(renderer);
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
             Image a = *img_iter;
-            SDL_RenderTexture(renderer, a.img, NULL, NULL);
+            SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
         }
         SDL_RenderPresent(renderer);
 
