@@ -1,5 +1,7 @@
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <SDL.h>
 #include <SDL_main.h>
@@ -13,6 +15,7 @@
 #include <vector>
 #include <algorithm>
 #include <stdlib.h>
+#include <numeric>
 
 using json = nlohmann::json;
 
@@ -33,13 +36,24 @@ void SDL_Fail(const char* errText){
     exit(1);
 }
 
-int bp = 0;
+float avg = 0;
 void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
     if (additional_amount > 0) {
         Uint8 *data = SDL_stack_alloc(Uint8, additional_amount);
         if (data) {
             SDL_GetAudioStreamData(stream, data, additional_amount);
-            std::cout << data << '\n';
+
+            int16_t sample;
+            float scale = (float)(1.0 / (double)(1 << (sizeof(sample) - 1)));
+            std::vector<float> samples;
+            for(int i = 0; i < total_amount; i += sizeof(data)){
+                memcpy(&sample, &data[i], sizeof(sample));
+                float s = sample * scale;
+                samples.push_back(s);
+            }
+
+            avg = abs(std::reduce(samples.begin(), samples.end()) / samples.size());
+            // std::cout << avg << '\n';
             SDL_stack_free(data);
         }
     }
@@ -53,24 +67,6 @@ std::vector<int> split(const std::string &s, char delimiter) {
         tokens.push_back(stoi(token));
     }
     return tokens;
-}
-
-
-void copyFile(const char* from, const char* to){
-
-    SDL_Log("Copying %s to %s", from, to);
-
-    char buf[BUFSIZ];
-    size_t size;
-
-    FILE* s = fopen(from, "r");
-    FILE* d = fopen(to, "w");
-
-    while(size = fread(buf, 1, BUFSIZ, s))
-        fwrite(buf, 1, size, d);
-
-    fclose(s);
-    fclose(d);
 }
 
 static bool app_quit = false;
@@ -152,7 +148,7 @@ int main(int argc, char* argv[]){
 
         // Copy save file to profile dir if not exists
         if(stat((outf+"/save.json").c_str(), &info) != 0)
-            copyFile(savepath, (outf+"/save.json").c_str());
+            std::filesystem::copy_file(savepath, (outf+"/save.json").c_str());
 
         // Decode file to profile dir if not exists
         if(stat(outp.c_str(), &info) != 0){
@@ -207,7 +203,6 @@ int main(int argc, char* argv[]){
     const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
 
     SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, NULL);
-    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
 
     SDL_ShowWindow(window);
     {
@@ -224,9 +219,24 @@ int main(int argc, char* argv[]){
         }
     }
 
+    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
+    SDL_FRect fq;
+    fq.x = 0;
+    fq.y = 0;
+    fq.h = 16;
+    fq.w = 16;
+
     SDL_Log("Application started successfully!");
 
+    float a = SDL_GetTicks();
+    float b = SDL_GetTicks();
+    float delta = 0;
+    float FPS = 60.0f;
+
     while (!app_quit) {
+
+        a = SDL_GetTicks();
+        delta = a - b;
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -235,14 +245,25 @@ int main(int argc, char* argv[]){
             break;
         }
 
-        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-        SDL_RenderClear(renderer);
-        for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
-            Image a = *img_iter;
-            SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
+        if(delta > 1000/FPS){ // FPS cap to 60
+            b = a;
+
+            fq.w = 2*avg;
+            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+            SDL_RenderClear(renderer);
+
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 0);
+            SDL_RenderRect(renderer, &fq);
+
+            for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
+                Image a = *img_iter;
+                SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
+            }
+
+            SDL_RenderPresent(renderer);
         }
-        SDL_RenderPresent(renderer);
-        SDL_Delay(15);
+
+        SDL_Delay(15); // reduce cpu usage
     }
 
     SDL_DestroyRenderer(renderer);
