@@ -76,7 +76,7 @@ typedef struct Image{
     int id;
     SDL_Texture* img;
     int zindex;
-    bool blink;
+    int blink;   // 0, 1, 2
     int talk;    // 0, 1, 2
     int pid;     // parent id
     SDL_FRect rect;
@@ -114,6 +114,7 @@ int main(int argc, char* argv[]){
         SDL_Fail(SDL_GetError());
     }
 
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
     SDL_Window* window = SDL_CreateWindow("Yet Another PNGTuber", 720, 720, RENDERER_FLAG | SDL_WINDOW_TRANSPARENT);
     if (!window){
@@ -194,7 +195,7 @@ int main(int argc, char* argv[]){
         if(!dat["parentId"].is_null())
             pid = dat["parentId"];
 
-        img.push_back({dat["identification"], a, dat["zindex"], false, 0, pid, r});
+        img.push_back({dat["identification"], a, dat["zindex"], dat["showBlink"], dat["showTalk"], pid, r});
 
     }
 
@@ -232,6 +233,7 @@ int main(int argc, char* argv[]){
     float b = SDL_GetTicks();
     float delta = 0;
     float FPS = 60.0f;
+    float pAvg = 0;
 
     while (!app_quit) {
 
@@ -248,7 +250,11 @@ int main(int argc, char* argv[]){
         if(delta > 1000/FPS){ // FPS cap to 60
             b = a;
 
-            fq.w = 2*avg;
+            float dAvg = pAvg + 1 * (avg - pAvg);
+            fq.w = dAvg;
+
+            pAvg = avg;
+
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
             SDL_RenderClear(renderer);
 
@@ -257,7 +263,11 @@ int main(int argc, char* argv[]){
 
             for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
                 Image a = *img_iter;
-                SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
+                int ts = 1;
+                if(dAvg > 3)
+                    ts = 2;
+                if((a.blink == 0 || a.blink == 1) && (a.talk == 0 || a.talk == ts))
+                    SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
             }
 
             SDL_RenderPresent(renderer);
