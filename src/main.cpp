@@ -16,13 +16,11 @@
 #include <algorithm>
 #include <stdlib.h>
 #include <numeric>
+#include <unistd.h>
+#include <pwd.h>
 
 using json = nlohmann::json;
-
-#ifndef SAVE_PATH
-// TODO: change to user config folder
-#define SAVE_PATH "../savedata/"
-#endif
+struct passwd *pw = getpwuid(getuid());
 
 #ifdef WINDOW_FLAG_OPENGL
 #define RENDERER_FLAG SDL_WINDOW_OPENGL
@@ -52,8 +50,7 @@ void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int tot
                 samples.push_back(s);
             }
 
-            avg = abs(std::reduce(samples.begin(), samples.end()) / samples.size());
-            // std::cout << avg << '\n';
+            avg = std::reduce(samples.begin(), samples.end()) / samples.size();
             SDL_stack_free(data);
         }
     }
@@ -88,6 +85,15 @@ bool Image_zindex_cmp(const Image &a, const Image &b){
 
 int main(int argc, char* argv[]){
 
+    const char* SAVE_PATH;
+    std::string cpath;
+    if ((SAVE_PATH = getenv("HOME")) == NULL) {
+        SAVE_PATH = getpwuid(getuid())->pw_dir;
+    }
+    cpath = SAVE_PATH;
+    cpath.append("/.config/yapng/");
+    SAVE_PATH = cpath.c_str();
+
     // Check if SAVE_PATH exists or create
     struct stat info;
     if(stat(SAVE_PATH, &info) != 0)
@@ -96,7 +102,10 @@ int main(int argc, char* argv[]){
 
     // Open save file
     // TODO: create entry in settings
-    const char* savepath = "../assets/save.json";
+    const char* savepath = "assets/save.json";
+    std::string sp = SAVE_PATH;
+    sp.append(savepath);
+    savepath = sp.c_str();
     std::ifstream savefile(savepath);
 
     if(!savefile.is_open())
@@ -234,6 +243,7 @@ int main(int argc, char* argv[]){
     float delta = 0;
     float FPS = 60.0f;
     float pAvg = 0;
+    float dAvg = 0;
 
     while (!app_quit) {
 
@@ -250,9 +260,10 @@ int main(int argc, char* argv[]){
         if(delta > 1000/FPS){ // FPS cap to 60
             b = a;
 
-            float dAvg = pAvg + 1 * (avg - pAvg);
+            if(avg > 0)
+                dAvg = pAvg + 1 * (avg - pAvg);
             fq.w = dAvg;
-
+            SDL_Log("Mic level: %f", dAvg);
             pAvg = avg;
 
             SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
@@ -264,9 +275,10 @@ int main(int argc, char* argv[]){
             for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
                 Image a = *img_iter;
                 int ts = 1;
-                if(dAvg > 3)
+                int bs = 1;
+                if(dAvg > 1)
                     ts = 2;
-                if((a.blink == 0 || a.blink == 1) && (a.talk == 0 || a.talk == ts))
+                if((a.blink == 0 || a.blink == bs) && (a.talk == 0 || a.talk == ts))
                     SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
             }
 

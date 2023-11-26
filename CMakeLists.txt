@@ -13,6 +13,7 @@ add_executable(${EXECUTABLE_NAME})
 target_sources(${EXECUTABLE_NAME} PRIVATE src/main.cpp)
 
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
+set(SDL3_FOUND TRUE)
 add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
 
 if(WINDOW_FLAG_OPENGL)
