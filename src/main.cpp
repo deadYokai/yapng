@@ -1,26 +1,19 @@
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <cstring>
-#include <iostream>
-#include <SDL.h>
-#include <SDL_main.h>
-#include <SDL3_image/SDL_image.h>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <filesystem>
-#include "base64.hpp"
-#include <vector>
-#include <algorithm>
-#include <stdlib.h>
-#include <numeric>
+#include <cstdlib>
 #include <unistd.h>
+#include <fstream>
+#include <filesystem>
+#include <sys/stat.h>
 #include <pwd.h>
 
+#include <SDL.h>
+#include <SDL_main.h>
+
+#include <nlohmann/json.hpp>
+#include "base64.hpp"
+#include "sprite.h"
+
 using json = nlohmann::json;
-struct passwd *pw = getpwuid(getuid());
 
 #ifdef WINDOW_FLAG_OPENGL
 #define RENDERER_FLAG SDL_WINDOW_OPENGL
@@ -37,21 +30,20 @@ void SDL_Fail(const char* errText){
 float avg = 0;
 void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
     if (additional_amount > 0) {
-        Uint8 *data = SDL_stack_alloc(Uint8, additional_amount);
+        auto *data = SDL_stack_alloc(Uint8, additional_amount);
         if (data) {
             SDL_GetAudioStreamData(stream, data, additional_amount);
 
-            int16_t sample;
-            float scale = (float)(1.0 / (double)(1 << (sizeof(sample) - 1)));
+            short sample;
+            auto scale = (float)(1.0 / (double)(1 << (sizeof(sample) - 1)));
             std::vector<float> samples;
             for(int i = 0; i < total_amount; i += sizeof(data)){
                 memcpy(&sample, &data[i], sizeof(sample));
-                float s = sample * scale;
+                short s = sample * scale;
                 samples.push_back(s);
             }
 
-            avg = std::reduce(samples.begin(), samples.end()) / samples.size();
-            SDL_stack_free(data);
+            avg = std::reduce(samples.begin(), samples.end()) / (float)samples.size();
         }
     }
 }
@@ -68,57 +60,7 @@ std::vector<int> split(const std::string &s, char delimiter) {
 
 static bool app_quit = false;
 SDL_Renderer* renderer = nullptr;
-
-typedef struct Image{
-    int id;
-    SDL_Texture* img;
-    int zindex;
-    int blink;   // 0, 1, 2
-    int talk;    // 0, 1, 2
-    int pid;     // parent id
-    SDL_FRect rect;
-} Image;
-
-bool Image_zindex_cmp(const Image &a, const Image &b){
-    return a.zindex < b.zindex;
-}
-
-int main(int argc, char* argv[]){
-
-    const char* SAVE_PATH;
-    std::string cpath;
-    if ((SAVE_PATH = getenv("HOME")) == NULL) {
-        SAVE_PATH = getpwuid(getuid())->pw_dir;
-    }
-    cpath = SAVE_PATH;
-    cpath.append("/.config/yapng/");
-    SAVE_PATH = cpath.c_str();
-
-    // Check if SAVE_PATH exists or create
-    struct stat info;
-    if(stat(SAVE_PATH, &info) != 0)
-        if (mkdir(SAVE_PATH, 0777) != 0)
-            SDL_Fail("unable to create user data folder");
-
-    // Open save file
-    // TODO: create entry in settings
-    const char* savepath = "assets/save.json";
-    std::string sp = SAVE_PATH;
-    sp.append(savepath);
-    savepath = sp.c_str();
-    std::ifstream savefile(savepath);
-
-    if(!savefile.is_open())
-        SDL_Fail("cannot access to save file");
-
-    // Getting info from json (save file)
-    json savedata;
-    savefile >> savedata;
-
-    std::vector<Image> img;
-    std::vector<Image>::iterator img_iter;
-
-
+SDL_Window* initRender(){
     if (SDL_Init(SDL_INIT_EVERYTHING)){
         SDL_Fail(SDL_GetError());
     }
@@ -130,15 +72,56 @@ int main(int argc, char* argv[]){
         SDL_Fail(SDL_GetError());
     }
 
-    renderer = SDL_CreateRenderer(window, NULL, SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window, nullptr, SDL_RENDERER_ACCELERATED);
     if (!renderer){
         SDL_Fail(SDL_GetError());
     }
 
-    float scale = 0.7;
-    for (json::iterator it = savedata.begin(); it != savedata.end(); ++it) {
-        auto dat = *it;
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+    return window;
+}
+
+int main(){
+
+
+    SDL_Window* window = initRender();
+    const char* SAVE_PATH;
+    std::string cpath;
+    if ((SAVE_PATH = getenv("HOME")) == nullptr) {
+        SAVE_PATH = getpwuid(getuid())->pw_dir;
+    }
+    cpath = SAVE_PATH;
+    cpath.append("/.config/yapng/");
+    SAVE_PATH = cpath.c_str();
+
+    // Check if SAVE_PATH exists or create
+    if(!std::filesystem::exists(SAVE_PATH))
+        if (mkdir(SAVE_PATH, 0777) != 0)
+            SDL_Fail("unable to create user data folder");
+
+    // Open save file
+    // TODO: create entry in settings
+    const char* savepath = "assets/save.json";
+    std::string sp = SAVE_PATH;
+    sp.append(savepath);
+    savepath = sp.c_str();
+
+    if(!std::filesystem::exists(savepath))
+        SDL_Fail("save file not found");
+
+    std::ifstream savefile(savepath);
+    if(!savefile.is_open())
+        SDL_Fail("cannot access to save file");
+
+    // Getting info from json (save file)
+    json savedata;
+    savefile >> savedata;
+
+    std::vector<Sprite> img;
+    std::vector<Sprite>::iterator img_iter;
+
+    for (auto dat : savedata) {
         if(dat["path"] == NULL)
             SDL_Fail("unsupported or broken save file");
 
@@ -149,19 +132,19 @@ int main(int argc, char* argv[]){
         std::string outp = SAVE_PATH;
         outp.append(path);
 
-        auto outf = outp.substr(0, outp.find_last_of("/"));
+        auto outf = outp.substr(0, outp.find_last_of('/'));
 
         // Check if profile folder exists or create folder
-        if(stat(outf.c_str(), &info) != 0)
+        if(!std::filesystem::exists(outf.c_str()))
             if (mkdir(outf.c_str(), 0777) != 0)
                 SDL_Fail("unable to create profile folder");
 
         // Copy save file to profile dir if not exists
-        if(stat((outf+"/save.json").c_str(), &info) != 0)
+        if(!std::filesystem::exists((outf+"/save.json").c_str()))
             std::filesystem::copy_file(savepath, (outf+"/save.json").c_str());
 
         // Decode file to profile dir if not exists
-        if(stat(outp.c_str(), &info) != 0){
+        if(!std::filesystem::exists(outp.c_str())){
 
             // Check if encoded image exists in a save file
             if(dat["imageData"] == NULL)
@@ -180,39 +163,27 @@ int main(int argc, char* argv[]){
         }
 
 
-
-        SDL_FRect r;
-        SDL_Texture* a = IMG_LoadTexture(renderer, outp.c_str());
-
-        int w, h;
-        SDL_QueryTexture(a, NULL, NULL, &w, &h);
-
         auto ps = dat["pos"].get_ref<const std::string &>();
         auto p = ps.substr(8, ps.length()-9);
+        auto of = dat["offset"].get_ref<const std::string &>();
+        auto off = of.substr(8, ps.length()-9);
 
         std::vector<int> ipos = split(p, ',');
-
-        int new_x = w/2 - (w/2 * scale);
-        int new_y = abs(720-h)/2 - (abs(720-h)/2 * scale);
-
-        r.x = new_x;
-        r.y = new_y;
-        r.w = w * scale;
-        r.h = h * scale;
+        std::vector<int> ioff = split(off, ',');
 
         int pid = 0;
-        if(!dat["parentId"].is_null())
+        if(!dat["parentId"].is_null()) {
             pid = dat["parentId"];
+        }
 
-        img.push_back({dat["identification"], a, dat["zindex"], dat["showBlink"], dat["showTalk"], pid, r});
+        int state[2] = {dat["showTalk"],dat["showBlink"]};
+
+        Sprite spr(renderer, outp.c_str(), 0, pid, ipos, ioff, dat["zindex"], state);
+        img.push_back(spr);
 
     }
 
-    std::sort(img.begin(), img.end(), Image_zindex_cmp);
-
-    const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
-
-    SDL_AudioStream* stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, NULL);
+    std::sort(img.begin(), img.end(), [](Sprite &a, Sprite &b) -> bool {return a.zIndex < b.zIndex;});
 
     SDL_ShowWindow(window);
     {
@@ -229,7 +200,7 @@ int main(int argc, char* argv[]){
         }
     }
 
-    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
+    // mic level rect
     SDL_FRect fq;
     fq.x = 0;
     fq.y = 0;
@@ -238,17 +209,13 @@ int main(int argc, char* argv[]){
 
     SDL_Log("Application started successfully!");
 
-    float a = SDL_GetTicks();
-    float b = SDL_GetTicks();
-    float delta = 0;
-    float FPS = 60.0f;
     float pAvg = 0;
     float dAvg = 0;
 
+    const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
+    auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
+    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
     while (!app_quit) {
-
-        a = SDL_GetTicks();
-        delta = a - b;
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -257,33 +224,30 @@ int main(int argc, char* argv[]){
             break;
         }
 
-        if(delta > 1000/FPS){ // FPS cap to 60
-            b = a;
+        if(avg >= 0)
+            dAvg = pAvg + 1 * (avg - pAvg);
 
-            if(avg > 0)
-                dAvg = pAvg + 1 * (avg - pAvg);
-            fq.w = dAvg;
-            SDL_Log("Mic level: %f", dAvg);
-            pAvg = avg;
+        fq.w = (dAvg*100/256)*720/100;
+        SDL_Log("Mic level: %f", dAvg);
+        pAvg = avg;
 
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
-            SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
+        SDL_RenderClear(renderer);
 
-            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 0);
-            SDL_RenderRect(renderer, &fq);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 0);
+        SDL_RenderRect(renderer, &fq);
 
-            for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
-                Image a = *img_iter;
-                int ts = 1;
-                int bs = 1;
-                if(dAvg > 1)
-                    ts = 2;
-                if((a.blink == 0 || a.blink == bs) && (a.talk == 0 || a.talk == ts))
-                    SDL_RenderTexture(renderer, a.img, NULL, &a.rect);
-            }
-
-            SDL_RenderPresent(renderer);
+        for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
+            Sprite a = *img_iter;
+            int ts = 1;
+            if(dAvg > 1)
+                ts = 2;
+            a.setActiveTalkState(ts);
+            a.setActiveBlinkState(1); // TODO: create random time change
+            a.render();
         }
+
+        SDL_RenderPresent(renderer);
 
         SDL_Delay(15); // reduce cpu usage
     }

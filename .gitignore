@@ -1,4 +1,7 @@
+.idea/
+
 build/
 savedata/
+cmake-build-debug/
 
 assets/save.json
