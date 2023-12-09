@@ -10,6 +10,7 @@
 #include <SDL_main.h>
 
 #include <nlohmann/json.hpp>
+#include <future>
 #include "base64.hpp"
 #include "sprite.h"
 
@@ -27,7 +28,7 @@ void SDL_Fail(const char* errText){
     exit(1);
 }
 
-float avg = 0;
+float volume = 0;
 void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
     if (additional_amount > 0) {
         auto *data = SDL_stack_alloc(Uint8, additional_amount);
@@ -42,8 +43,7 @@ void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int tot
                 short s = sample * scale;
                 samples.push_back(s);
             }
-
-            avg = std::reduce(samples.begin(), samples.end()) / (float)samples.size();
+            volume = std::max_element(samples.begin(), samples.end())[0];
         }
     }
 }
@@ -83,8 +83,6 @@ SDL_Window* initRender(){
 }
 
 int main(){
-
-
     SDL_Window* window = initRender();
     const char* SAVE_PATH;
     std::string cpath;
@@ -200,6 +198,13 @@ int main(){
         }
     }
 
+
+    SDL_Log("Application started successfully!");
+
+    const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
+    auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
+    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
+
     // mic level rect
     SDL_FRect fq;
     fq.x = 0;
@@ -207,49 +212,36 @@ int main(){
     fq.h = 16;
     fq.w = 16;
 
-    SDL_Log("Application started successfully!");
-
-    float pAvg = 0;
-    float dAvg = 0;
-
-    const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
-    auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
-    SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
     while (!app_quit) {
 
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT)
+            if (event.type == SDL_EVENT_QUIT) {
                 app_quit = true;
+            }
             break;
         }
 
-        if(avg >= 0)
-            dAvg = pAvg + 1 * (avg - pAvg);
-
-        fq.w = (dAvg*100/256)*720/100;
-        SDL_Log("Mic level: %f", dAvg);
-        pAvg = avg;
+        fq.w = (volume*100/16000)*720/100;
+        SDL_Log("Mic level: %f", volume);
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
 
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 0);
-        SDL_RenderRect(renderer, &fq);
-
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
             Sprite a = *img_iter;
             int ts = 1;
-            if(dAvg > 1)
+            if(volume > 50) // configure mic sensitivity
                 ts = 2;
             a.setActiveTalkState(ts);
             a.setActiveBlinkState(1); // TODO: create random time change
             a.render();
         }
 
-        SDL_RenderPresent(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+        SDL_RenderRect(renderer, &fq);
 
-        SDL_Delay(15); // reduce cpu usage
+        SDL_RenderPresent(renderer);
     }
 
     SDL_DestroyRenderer(renderer);
