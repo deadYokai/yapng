@@ -9,8 +9,10 @@
 #include <SDL.h>
 #include <SDL_main.h>
 
+
 #include <nlohmann/json.hpp>
 #include <future>
+
 #include "base64.hpp"
 #include "sprite.h"
 
