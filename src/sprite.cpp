@@ -1,6 +1,8 @@
 #include "sprite.h"
 
 Sprite::Sprite(SDL_Renderer* renderer, const char *texturePath, int id, int parentId, std::vector<int> pos, std::vector<int> offset, int zIndex, const int image_state[2]) {
+
+    this->renderer = renderer;
     this->tex = IMG_LoadTexture(this->renderer, texturePath);
     SDL_QueryTexture(this->tex, nullptr, nullptr, &this->width, &this->height);
     int new_x = this->width/2 - (this->width/2 * this->scale);
@@ -11,7 +13,6 @@ Sprite::Sprite(SDL_Renderer* renderer, const char *texturePath, int id, int pare
     this->rect.w = this->width * this->scale;
     this->rect.h = this->height * this->scale;
     this->zIndex = zIndex;
-    this->renderer = renderer;
     this->pos[0] = pos[0];
     this->pos[1] = pos[1];
     this->off[0] = offset[0];

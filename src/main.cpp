@@ -1,7 +1,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
-#include <fstream>
 #include <filesystem>
 #include <sys/stat.h>
 #include <pwd.h>
@@ -9,26 +8,20 @@
 #include <SDL.h>
 #include <SDL_main.h>
 
-
 #include <nlohmann/json.hpp>
-#include <future>
-
 #include "base64.hpp"
+#include "log.h"
+#include "profile.h"
 #include "sprite.h"
 
 using json = nlohmann::json;
+using namespace Log;
 
 #ifdef WINDOW_FLAG_OPENGL
 #define RENDERER_FLAG SDL_WINDOW_OPENGL
 #else
 #define RENDERER_FLAG SDL_WINDOW_VULKAN
 #endif
-
-// Function for logging errors
-void SDL_Fail(const char* errText){
-    SDL_LogError(SDL_LOG_CATEGORY_CUSTOM, "%s", errText);
-    exit(1);
-}
 
 float volume = 0;
 void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
@@ -50,15 +43,6 @@ void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int tot
     }
 }
 
-std::vector<int> split(const std::string &s, char delimiter) {
-    std::vector<int> tokens;
-    std::string token;
-    std::istringstream tokenStream(s);
-    while (getline(tokenStream, token, delimiter)) {
-        tokens.push_back(stoi(token));
-    }
-    return tokens;
-}
 
 static bool app_quit = false;
 SDL_Renderer* renderer = nullptr;
@@ -103,87 +87,9 @@ int main(){
     // Open save file
     // TODO: create entry in settings
     const char* savepath = "assets/save.json";
-    std::string sp = SAVE_PATH;
-    sp.append(savepath);
-    savepath = sp.c_str();
-
-    if(!std::filesystem::exists(savepath))
-        SDL_Fail("save file not found");
-
-    std::ifstream savefile(savepath);
-    if(!savefile.is_open())
-        SDL_Fail("cannot access to save file");
-
-    // Getting info from json (save file)
-    json savedata;
-    savefile >> savedata;
-
-    std::vector<Sprite> img;
+    Profile p = Profile(SAVE_PATH, savepath, renderer);
+    std::vector<Sprite> img = p.sprites;
     std::vector<Sprite>::iterator img_iter;
-
-    for (auto dat : savedata) {
-        if(dat["path"] == NULL)
-            SDL_Fail("unsupported or broken save file");
-
-        auto spath = dat["path"].get_ref<const std::string &>();
-        auto sspath = spath.substr(7, spath.length()-7);
-        auto path = sspath.c_str();
-        std::ofstream png;
-        std::string outp = SAVE_PATH;
-        outp.append(path);
-
-        auto outf = outp.substr(0, outp.find_last_of('/'));
-
-        // Check if profile folder exists or create folder
-        if(!std::filesystem::exists(outf.c_str()))
-            if (mkdir(outf.c_str(), 0777) != 0)
-                SDL_Fail("unable to create profile folder");
-
-        // Copy save file to profile dir if not exists
-        if(!std::filesystem::exists((outf+"/save.json").c_str()))
-            std::filesystem::copy_file(savepath, (outf+"/save.json").c_str());
-
-        // Decode file to profile dir if not exists
-        if(!std::filesystem::exists(outp.c_str())){
-
-            // Check if encoded image exists in a save file
-            if(dat["imageData"] == NULL)
-                SDL_Fail("image data not found");
-
-            // Write files to profile folder
-            SDL_Log("Decoding %s to %s", path, outp.c_str());
-            png.open(outp.c_str());
-
-            if(!png.is_open())
-                SDL_Fail("Fail to write files");
-
-            std::string imgdat = dat["imageData"];
-            png << base64::from_base64(imgdat);
-            png.close();
-        }
-
-
-        auto ps = dat["pos"].get_ref<const std::string &>();
-        auto p = ps.substr(8, ps.length()-9);
-        auto of = dat["offset"].get_ref<const std::string &>();
-        auto off = of.substr(8, ps.length()-9);
-
-        std::vector<int> ipos = split(p, ',');
-        std::vector<int> ioff = split(off, ',');
-
-        int pid = 0;
-        if(!dat["parentId"].is_null()) {
-            pid = dat["parentId"];
-        }
-
-        int state[2] = {dat["showTalk"],dat["showBlink"]};
-
-        Sprite spr(renderer, outp.c_str(), 0, pid, ipos, ioff, dat["zindex"], state);
-        img.push_back(spr);
-
-    }
-
-    std::sort(img.begin(), img.end(), [](Sprite &a, Sprite &b) -> bool {return a.zIndex < b.zIndex;});
 
     SDL_ShowWindow(window);
     {
@@ -203,6 +109,7 @@ int main(){
 
     SDL_Log("Application started successfully!");
 
+    //TODO: transform to other class
     const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
     auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
     SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));

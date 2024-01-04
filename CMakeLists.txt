@@ -21,7 +21,11 @@ include_directories(include)
 
 add_executable(${EXECUTABLE_NAME})
 
-target_sources(${EXECUTABLE_NAME} PRIVATE src/sprite.cpp src/main.cpp src/saveManager.cpp)
+target_sources(${EXECUTABLE_NAME} PRIVATE
+        src/saveManager.cpp
+        src/profile.cpp
+        src/sprite.cpp
+        src/main.cpp )
 
 set(BUILD_SHARED_LIBS FALSE)
 set(SDL3_FOUND TRUE)
