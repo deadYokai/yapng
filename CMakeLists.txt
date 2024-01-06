@@ -25,6 +25,7 @@ target_sources(${EXECUTABLE_NAME} PRIVATE
         src/saveManager.cpp
         src/profile.cpp
         src/sprite.cpp
+        src/slider.cpp
         src/main.cpp )
 
 set(BUILD_SHARED_LIBS FALSE)

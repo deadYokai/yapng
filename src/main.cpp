@@ -13,6 +13,7 @@
 #include "log.h"
 #include "profile.h"
 #include "sprite.h"
+#include "slider.h"
 
 using json = nlohmann::json;
 using namespace Log;
@@ -121,18 +122,23 @@ int main(){
     fq.h = 16;
     fq.w = 16;
 
+    slider s;
+    s.assets_in();
+
     while (!app_quit) {
 
         SDL_Event event;
+        s.GetMouseState();
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 app_quit = true;
             }
+            s.RegisterEvent(event);
             break;
         }
 
         fq.w = (volume*100/16000)*720/100;
-        SDL_Log("Mic level: %f", volume);
+//        SDL_Log("Mic level: %f", volume);
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
@@ -150,9 +156,12 @@ int main(){
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderRect(renderer, &fq);
 
+        s.Render(renderer);
+
         SDL_RenderPresent(renderer);
     }
 
+    s.assets_out();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
