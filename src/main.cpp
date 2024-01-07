@@ -117,13 +117,15 @@ int main(){
 
     // mic level rect
     SDL_FRect fq;
-    fq.x = 0;
-    fq.y = 0;
+    fq.x = 10;
+    fq.y = 16;
     fq.h = 16;
     fq.w = 16;
 
     slider s;
-    s.assets_in();
+    SDL_FRect np = fq;
+    np.w = 700;
+    s.assets_in(slider::Rot::horizontal, np);
 
     while (!app_quit) {
 
@@ -137,7 +139,7 @@ int main(){
             break;
         }
 
-        fq.w = (volume*100/16000)*720/100;
+        fq.w = (volume*100/16000)*700/100;
 //        SDL_Log("Mic level: %f", volume);
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
@@ -154,9 +156,9 @@ int main(){
         }
 
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderRect(renderer, &fq);
+        SDL_RenderFillRect(renderer, &fq);
 
-        s.Render(renderer);
+        s.Render(renderer, false);
 
         SDL_RenderPresent(renderer);
     }

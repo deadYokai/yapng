@@ -8,22 +8,25 @@
 
 class slider {
 public:
-    void Render(SDL_Renderer *sdl_renderer);
+    enum Rot : bool{
+        vertical = false,
+        horizontal = true
+    };
+    void Render(SDL_Renderer *sdl_renderer, bool fillbg = true);
     void RegisterEvent(SDL_Event &event);
     void GetMouseState();
-    void assets_in();
+    void assets_in(Rot p, SDL_FRect opos);
     void assets_out();
+
+    [[maybe_unused]] void posChange(SDL_FRect opos);
 private:
     float w;
     float h;
-    SDL_Surface* tmp;
-//    SDL_Texture* bg;
-//    SDL_Texture* button;
+    bool rot;
+    SDL_FRect pos;
     SDL_FRect bg;
     SDL_FRect button;
-    SDL_Rect butt_dst;
     SDL_FRect butt_bounds;
-    SDL_Rect bg_dst;
     SDL_FPoint mouse;
     SDL_bool mouse_follow = SDL_FALSE;
     SDL_FPoint mouse_offset;
