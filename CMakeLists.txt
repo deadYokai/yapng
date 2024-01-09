@@ -22,10 +22,10 @@ include_directories(include)
 add_executable(${EXECUTABLE_NAME})
 
 target_sources(${EXECUTABLE_NAME} PRIVATE
-        src/saveManager.cpp
         src/profile.cpp
         src/sprite.cpp
         src/slider.cpp
+        src/saveManager.cpp
         src/main.cpp )
 
 set(BUILD_SHARED_LIBS FALSE)

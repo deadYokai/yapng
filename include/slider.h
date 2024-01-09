@@ -3,6 +3,7 @@
 //
 
 #include "SDL.h"
+
 #ifndef YAPNG_SLIDER_H
 #define YAPNG_SLIDER_H
 
@@ -18,18 +19,22 @@ public:
     void assets_in(Rot p, SDL_FRect opos);
     void assets_out();
 
+    float getValue(float max = 100);
+    void setValue(float val, float max = 100);
+
     [[maybe_unused]] void posChange(SDL_FRect opos);
 private:
-    float w;
-    float h;
-    bool rot;
-    SDL_FRect pos;
-    SDL_FRect bg;
-    SDL_FRect button;
-    SDL_FRect butt_bounds;
-    SDL_FPoint mouse;
+    float w{};
+    float h{};
+    float val = 0;;
+    bool rot{};
+    SDL_FRect pos{};
+    SDL_FRect bg{};
+    SDL_FRect button{};
+    SDL_FRect butt_bounds{};
+    SDL_FPoint mouse{};
     SDL_bool mouse_follow = SDL_FALSE;
-    SDL_FPoint mouse_offset;
+    SDL_FPoint mouse_offset{};
 };
 
 

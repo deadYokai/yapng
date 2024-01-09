@@ -2,9 +2,11 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <filesystem>
+#include <iostream>
 #include <sys/stat.h>
 #include <pwd.h>
-
+#include <saveManager.h>
+#include <random>
 #include <SDL.h>
 #include <SDL_main.h>
 
@@ -70,6 +72,7 @@ SDL_Window* initRender(){
 }
 
 int main(){
+    saveManager sett;
     SDL_Window* window = initRender();
     const char* SAVE_PATH;
     std::string cpath;
@@ -85,7 +88,9 @@ int main(){
         if (mkdir(SAVE_PATH, 0777) != 0)
             SDL_Fail("unable to create user data folder");
 
-    // Open save file
+    if(sett.load() == saveManager::CANNOT_ACCESS)
+        SDL_Fail("Cannot access to settings file");
+
     // TODO: create entry in settings
     const char* savepath = "assets/save.json";
     Profile p = Profile(SAVE_PATH, savepath, renderer);
@@ -115,55 +120,85 @@ int main(){
     auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
     SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
 
-    // mic level rect
+    float barW = 700; // mic level width
+
+    Uint64 vtimer = SDL_GetTicks();
+    Uint64 btimer = SDL_GetTicks();
+    Uint64 vDelay = 200; // voice anim delay
+    Uint64 bDelay = 500; // blink anim delay
+
     SDL_FRect fq;
     fq.x = 10;
     fq.y = 16;
     fq.h = 16;
-    fq.w = 16;
+    fq.w = barW;
 
-    slider s;
-    SDL_FRect np = fq;
-    np.w = 700;
-    s.assets_in(slider::Rot::horizontal, np);
+    slider volMeter;
+    volMeter.assets_in(slider::Rot::horizontal, fq);
 
+    std::random_device rd;  // a seed source for the random number engine
+    std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
+    std::uniform_int_distribution<> distrib(0, 10);
+
+    int ts = 1;
+    int bs = 1;
     while (!app_quit) {
 
         SDL_Event event;
-        s.GetMouseState();
+        volMeter.GetMouseState();
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 app_quit = true;
             }
-            s.RegisterEvent(event);
+            volMeter.RegisterEvent(event);
             break;
         }
 
-        fq.w = (volume*100/16000)*700/100;
-//        SDL_Log("Mic level: %f", volume);
+        fq.w = (volume*100/8000)*barW/100;
+        if(fq.w >= barW)
+            fq.w = barW;
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
         SDL_RenderClear(renderer);
 
+        float micVal = volMeter.getValue(8000);
+        // sett.setEntry("mic_sensitivity", micVal);
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
             Sprite a = *img_iter;
-            int ts = 1;
-            if(volume > 50) // configure mic sensitivity
+
+            // talk
+            if(volume > micVal) // configure mic sensitivity
                 ts = 2;
+            if((vtimer + vDelay) <= SDL_GetTicks()) {
+                if(volume <= micVal)
+                    ts = 1;
+                vtimer = SDL_GetTicks();
+            }
             a.setActiveTalkState(ts);
-            a.setActiveBlinkState(1); // TODO: create random time change
+
+            // blinks
+            int random = distrib(gen);
+            if((btimer + bDelay) <= SDL_GetTicks()) {
+                if(random == 7)
+                    bs = 2;
+                else
+                    bs = 1;
+                btimer = SDL_GetTicks();
+            }
+            a.setActiveBlinkState(bs);
+
             a.render();
         }
 
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderFillRect(renderer, &fq);
 
-        s.Render(renderer, false);
+        volMeter.Render(renderer, false);
 
         SDL_RenderPresent(renderer);
     }
 
-    s.assets_out();
+    volMeter.assets_out();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

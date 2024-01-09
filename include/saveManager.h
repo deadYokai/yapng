@@ -11,18 +11,18 @@ using json = nlohmann::json;
 
 class saveManager {
 public:
-    template<class T>
+    template<typename T>
     T getEntry(const char* name);
-    template<class T>
+    template<typename T>
     int setEntry(const char* name, T val);
-    int load(const char* filepath);
-private:
-    char* SAVE_PATH;
-    json prefs;
+    int load();
     enum{
         CANNOT_ACCESS,
         OK = 100
     };
+private:
+    char* SAVE_PATH;
+    json prefs;
 };
 
 #endif //YAPNG_SAVEMANAGER_H

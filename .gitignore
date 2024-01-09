@@ -3,5 +3,6 @@
 build/
 savedata/
 cmake-build-debug/
+cmake-build-release/
 
 assets/save.json

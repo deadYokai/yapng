@@ -4,9 +4,11 @@
 
 #include "slider.h"
 
+#include <cmath>
+
 void slider::Render(SDL_Renderer *sdl_renderer, bool fillbg) {
     if(this->mouse_follow){
-        if(this->rot == Rot::horizontal){
+        if(this->rot == horizontal){
             this->button.x = this->mouse.x - this->mouse_offset.x;
 
             if (this->button.x <= this->butt_bounds.x) {
@@ -50,7 +52,7 @@ void slider::RegisterEvent(SDL_Event &event) {
         if (event.button.button == SDL_BUTTON_LEFT) {
 
             if (event.button.button == SDL_BUTTON_LEFT && SDL_PointInRectFloat(&this->mouse, &this->button) && !this->mouse_follow) {
-                if(this->rot == Rot::horizontal)
+                if(this->rot == horizontal)
                     this->mouse_offset.x = this->mouse.x - this->button.x;
                 else
                     this->mouse_offset.y = this->mouse.y - this->button.y;
@@ -62,6 +64,23 @@ void slider::RegisterEvent(SDL_Event &event) {
         this->mouse_follow = SDL_FALSE;
     }
 }
+
+void slider::setValue(float val, float max) {
+    this->val = val;
+    
+}
+
+
+float slider::getValue(float max) {
+    float vmin = this->butt_bounds.x + this->button.w/2;
+    float vmax = (this->butt_bounds.x + this->butt_bounds.w) - (button.w/2);
+    float v = vmax - (this->button.x + this->button.w/2);
+    float vstep = (vmax - vmin)/max;
+    float value = max-(v/vstep);
+    this->val = value;
+    return this->val;
+}
+
 
 [[maybe_unused]] void slider::posChange(SDL_FRect opos) {
     this->pos = opos;
@@ -104,7 +123,7 @@ void slider::assets_in(Rot p, SDL_FRect opos) {
     this->butt_bounds.h=this->h;
     this->butt_bounds.x=this->button.x;
     this->butt_bounds.y=this->pos.y;
-    if(this->rot == Rot::horizontal){
+    if(this->rot == horizontal){
         this->butt_bounds.w=this->w;
         this->butt_bounds.h=this->button.h;
         this->butt_bounds.y=this->button.y;
