@@ -124,8 +124,11 @@ int main(){
 
     Uint64 vtimer = SDL_GetTicks();
     Uint64 btimer = SDL_GetTicks();
-    Uint64 vDelay = 200; // voice anim delay
-    Uint64 bDelay = 500; // blink anim delay
+    Uint64 vDelay = sett.getEntry("voiceDelayMs");; // voice anim delay
+    Uint64 bDelay = sett.getEntry("blinkDelayMs"); // blink anim delay
+
+    Uint64 animTimer = SDL_GetTicks();
+    Uint64 animTick = 15;
 
     SDL_FRect fq;
     fq.x = 10;
@@ -142,13 +145,28 @@ int main(){
 
     int ts = 1;
     int bs = 1;
+
+    volMeter.setValue(sett.getEntry("micSensitivity"), 8000);
+
+    bool focusedWindow = true;
+
     while (!app_quit) {
 
         SDL_Event event;
         volMeter.GetMouseState();
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                app_quit = true;
+            switch (event.type) {
+                case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+                    focusedWindow = false;
+                    break;
+                case SDL_EVENT_WINDOW_MOUSE_ENTER:
+                    focusedWindow = true;
+                    break;
+                case SDL_EVENT_QUIT:
+                    app_quit = true;
+                break;
+                default:
+                    break;
             }
             volMeter.RegisterEvent(event);
             break;
@@ -162,7 +180,8 @@ int main(){
         SDL_RenderClear(renderer);
 
         float micVal = volMeter.getValue(8000);
-        // sett.setEntry("mic_sensitivity", micVal);
+        sett.setEntry("micSensitivity", micVal);
+
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
             Sprite a = *img_iter;
 
@@ -179,7 +198,7 @@ int main(){
             // blinks
             int random = distrib(gen);
             if((btimer + bDelay) <= SDL_GetTicks()) {
-                if(random == 7)
+                if(random == 7) // just a random number
                     bs = 2;
                 else
                     bs = 1;
@@ -187,13 +206,21 @@ int main(){
             }
             a.setActiveBlinkState(bs);
 
+            if((animTimer + animTick) <= SDL_GetTicks()) {
+                int ax = a.getX() + (a.getX()*a.fa[0]);
+                int ay = a.getY() + (a.getY()*a.fa[2])*2;
+                a.setPos(ax, ay);
+            }
+
             a.render();
         }
 
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
         SDL_RenderFillRect(renderer, &fq);
 
-        volMeter.Render(renderer, false);
+        if(focusedWindow) {
+            volMeter.Render(renderer, false);
+        }
 
         SDL_RenderPresent(renderer);
     }

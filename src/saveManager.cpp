@@ -7,7 +7,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fstream>
-#include <slider.h>
 
 int saveManager::load(){
     std::string p;
@@ -23,58 +22,38 @@ int saveManager::load(){
 
     std::strcpy(SAVE_PATH, p.data());
 
-    if(!std::filesystem::exists(SAVE_PATH)){
-        std::ofstream savefile(SAVE_PATH);
-        if(!savefile.is_open())
+    json j;
+    if(std::filesystem::exists(SAVE_PATH)){
+        std::ifstream readSaveFile(SAVE_PATH);
+        if(!readSaveFile.is_open())
             return CANNOT_ACCESS;
-        json j;
-
-        // Default preferences
-        j["loadedSave"] = "";
-        j["micSensitivity"] = 50;
-        j["animForce"] = 50;
-        j["voiceDelayMs"] = 200;
-        j["blinkDelayMs"] = 500;
-
-        j["micSliderPos"] = {10, 16};
-        j["micSliderSize"] = {700, 16};
-        j["micSliderRotation"] = slider::horizontal;
-        j["micSliderColorBar"] = {255, 0, 0, 255};
-        j["micSliderSolidBackground"] = false;
-        j["micSliderColorBackground"] = {255, 0, 0, 255};
-        j["micSliderColorSlider"] = {0, 255, 255, 128};
-
-        j["animSliderPos"] = {10, 704};
-        j["animSliderSize"] = {700, 16};
-        j["animSliderRotation"] = slider::horizontal;
-        j["animSliderSolidBackground"] = true;
-        j["animSliderColorBackground"] = {255, 0, 0, 255};
-        j["animSliderColorSlider"] = {0, 255, 255, 128};
-        std::string jsonstr = j.dump();
-        savefile.write(jsonstr.data(),  static_cast<long>(jsonstr.size()));
+        j = json::parse(readSaveFile);
     }
-
-    std::ifstream savefile(SAVE_PATH);
-    if(!savefile.is_open())
+    std::ofstream writeSaveFile(SAVE_PATH);
+    if(!writeSaveFile.is_open())
         return CANNOT_ACCESS;
-    savefile >> this->prefs;
+    for (const auto& [key, value] : this->defVals) {
+        if(j[key] == nullptr)
+            j[key] = value;
+    }
+    std::string jsonstr = j.dump(4);
+    writeSaveFile.write(jsonstr.data(),  static_cast<long>(jsonstr.size()));
+    this->prefs = j;
     return OK;
 }
 
-template<typename T>
-T saveManager::getEntry(const char* name) {
+nlohmann::basic_json<>::value_type saveManager::getEntry(const char* name) {
     return this->prefs[name];
 }
 
-template<typename T>
-int saveManager::setEntry(const char* name, T val) {
+int saveManager::setEntry(const char* name, nlohmann::basic_json<>::value_type val) {
     this->prefs[name] = val;
     if(!std::filesystem::exists(this->SAVE_PATH))
         return CANNOT_ACCESS;
     std::ofstream savefile(this->SAVE_PATH);
     if(!savefile.is_open())
         return CANNOT_ACCESS;
-    std::string jsonstr = this->prefs.dump();
+    std::string jsonstr = this->prefs.dump(4);
     savefile.write(jsonstr.data(), (long)jsonstr.size());
     return OK;
 }

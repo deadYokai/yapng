@@ -8,7 +8,7 @@
 
 class Sprite{
 public:
-    Sprite(SDL_Renderer* renderer, const char* texturePath, int id, int parentId, std::vector<int> pos, std::vector<int> offset, int zIndex, const int image_state[2]);
+    Sprite(SDL_Renderer* renderer, const char* texturePath, int id, int parentId, std::vector<int> pos, std::vector<int> offset, int zIndex, const int image_state[2], std::vector<float> freqAmp);
 
     int getPos[2];
     int getOffset[2];
@@ -21,6 +21,10 @@ public:
     void setScale(float scale);
     void setRenderer(SDL_Renderer* renderer);
 
+    int getX();
+    int getY();
+
+    std::vector<float> fa;
     int zIndex;
     void render();
 

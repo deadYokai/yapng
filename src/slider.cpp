@@ -66,18 +66,58 @@ void slider::RegisterEvent(SDL_Event &event) {
 }
 
 void slider::setValue(float val, float max) {
-    this->val = val;
-    
+    if(val < 0)
+        return;
+
+    if(max <= 0)
+        return;
+
+    float vmin, vmax, bbx, bbw, bw;
+
+    if(this->rot == horizontal) {
+        bbx = this->butt_bounds.x;
+        bbw = this->butt_bounds.w;
+        bw = this->button.w;
+    }else {
+        bbx = this->butt_bounds.y;
+        bbw = this->butt_bounds.h;
+        bw = this->button.h;
+    }
+
+    vmin = bbx + bw/2;
+    vmax = (bbx + bbw) - (bw/2);
+
+    float vstep = (vmax - vmin)/max;
+    float v = vstep * (max - val);
+
+    if(this->rot == horizontal)
+        this->button.x = vmax - v - this->button.w/2;
+    else
+        this->button.y = vmax - v - this->button.h/2;
 }
 
 
 float slider::getValue(float max) {
-    float vmin = this->butt_bounds.x + this->button.w/2;
-    float vmax = (this->butt_bounds.x + this->butt_bounds.w) - (button.w/2);
-    float v = vmax - (this->button.x + this->button.w/2);
+    if(max <= 0)
+        return 0;
+
+    float vmin, vmax, v;
+
+    if(this->rot == horizontal) {
+        vmin = this->butt_bounds.x + this->button.w/2;
+        vmax = (this->butt_bounds.x + this->butt_bounds.w) - (this->button.w/2);
+        v = vmax - (this->button.x + this->button.w/2);
+    }else{
+        vmin = this->butt_bounds.y + this->button.h/2;
+        vmax = (this->butt_bounds.y + this->butt_bounds.h) - (this->button.h/2);
+        v = vmax - (this->button.y + this->button.h/2);
+    }
+
     float vstep = (vmax - vmin)/max;
     float value = max-(v/vstep);
+
     this->val = value;
+
     return this->val;
 }
 
@@ -118,16 +158,16 @@ void slider::assets_in(Rot p, SDL_FRect opos) {
     this->button.x = (this->w/2)-(this->button.w/2)+this->pos.x;
     this->button.y = (this->h/2)-(this->button.h/2)+this->pos.y;
 
-
-    this->butt_bounds.w=this->button.w;
-    this->butt_bounds.h=this->h;
-    this->butt_bounds.x=this->button.x;
-    this->butt_bounds.y=this->pos.y;
     if(this->rot == horizontal){
         this->butt_bounds.w=this->w;
         this->butt_bounds.h=this->button.h;
         this->butt_bounds.y=this->button.y;
         this->butt_bounds.x=this->pos.x;
+    }else {
+        this->butt_bounds.w=this->button.w;
+        this->butt_bounds.h=this->h;
+        this->butt_bounds.x=this->button.x;
+        this->butt_bounds.y=this->pos.y;
     }
 
 }

@@ -87,6 +87,8 @@ Profile::Profile(const char *SAVE_PATH, const char *savepath, SDL_Renderer* rend
         std::vector<int> ipos = split(p, ',');
         std::vector<int> ioff = split(off, ',');
 
+        std::vector<float> freqAmp = {dat["xAmp"], dat["xFrq"], dat["yAmp"], dat["yFrq"]};
+
         int pid = 0;
         if(!dat["parentId"].is_null()) {
             pid = dat["parentId"];
@@ -94,7 +96,7 @@ Profile::Profile(const char *SAVE_PATH, const char *savepath, SDL_Renderer* rend
 
         int state[2] = {dat["showTalk"],dat["showBlink"]};
 
-        Sprite spr(renderer, outp.c_str(), 0, pid, ipos, ioff, dat["zindex"], state);
+        Sprite spr(renderer, outp.c_str(), 0, pid, ipos, ioff, dat["zindex"], state, freqAmp);
         img.push_back(spr);
 
     }
