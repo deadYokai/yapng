@@ -15,8 +15,6 @@ project(yapng C CXX)
 
 set(EXECUTABLE_NAME ${PROJECT_NAME})
 
-option(WINDOW_FLAG_OPENGL "Use OpenGL instead Vulkan" NO)
-
 include_directories(include)
 
 add_executable(${EXECUTABLE_NAME})
@@ -34,10 +32,6 @@ set(SDL_SHARED FALSE)
 set(SDL_STATIC TRUE)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(SDL_image EXCLUDE_FROM_ALL)
-
-if(WINDOW_FLAG_OPENGL)
-    target_compile_definitions(${EXECUTABLE_NAME} PUBLIC WINDOW_FLAG_OPENGL)
-endif()
 
 target_compile_features(${EXECUTABLE_NAME} PUBLIC)
 target_link_libraries(${EXECUTABLE_NAME} PUBLIC SDL3::SDL3-static SDL3_image::SDL3_image)

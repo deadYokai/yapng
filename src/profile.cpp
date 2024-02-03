@@ -101,6 +101,7 @@ Profile::Profile(const char *SAVE_PATH, const char *savepath, SDL_Renderer* rend
 
     }
 
+    // sort sprites by zIndex
     std::sort(img.begin(), img.end(), [](Sprite &a, Sprite &b) -> bool {return a.zIndex < b.zIndex;});
 
     this->sprites = img;

@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fstream>
+#include <utility>
 
 int saveManager::load(){
     std::string p;
@@ -47,13 +48,13 @@ nlohmann::basic_json<>::value_type saveManager::getEntry(const char* name) {
 }
 
 int saveManager::setEntry(const char* name, nlohmann::basic_json<>::value_type val) {
-    this->prefs[name] = val;
+    this->prefs[name] = std::move(val);
     if(!std::filesystem::exists(this->SAVE_PATH))
         return CANNOT_ACCESS;
     std::ofstream savefile(this->SAVE_PATH);
     if(!savefile.is_open())
         return CANNOT_ACCESS;
     std::string jsonstr = this->prefs.dump(4);
-    savefile.write(jsonstr.data(), (long)jsonstr.size());
+    savefile.write(jsonstr.data(), static_cast<long>(jsonstr.size()));
     return OK;
 }

@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
@@ -19,12 +20,6 @@
 
 using json = nlohmann::json;
 using namespace Log;
-
-#ifdef WINDOW_FLAG_OPENGL
-#define RENDERER_FLAG SDL_WINDOW_OPENGL
-#else
-#define RENDERER_FLAG SDL_WINDOW_VULKAN
-#endif
 
 float volume = 0;
 void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount){
@@ -49,10 +44,14 @@ void arc(void *userdata, SDL_AudioStream *stream, int additional_amount, int tot
 
 static bool app_quit = false;
 SDL_Renderer* renderer = nullptr;
-SDL_Window* initRender(){
+SDL_Window* initRender(bool opengl){
     if (SDL_Init(SDL_INIT_EVERYTHING)){
         SDL_Fail(SDL_GetError());
     }
+
+    auto RENDERER_FLAG = SDL_WINDOW_VULKAN;
+    if(opengl)
+        RENDERER_FLAG = SDL_WINDOW_OPENGL;
 
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
@@ -71,9 +70,24 @@ SDL_Window* initRender(){
     return window;
 }
 
-int main(){
+int main(int argc, char* argv[]){
+    bool opengl = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+
+        if (arg == "-h" || arg == "--help") {
+            std::cout << "Usage: " << argv[0] << " [options]\n";
+            std::cout << "Options:\n";
+            std::cout << "  -h, --help    Show this help message\n";
+            std::cout << "  -o, --opengl  Use OpenGL instead Vulkan\n";
+            exit(0);
+        }else if (arg == "-o" || arg == "--opengl") {
+            opengl = true;
+        }
+    }
+
     saveManager sett;
-    SDL_Window* window = initRender();
+    SDL_Window* window = initRender(opengl);
     const char* SAVE_PATH;
     std::string cpath;
     if ((SAVE_PATH = getenv("HOME")) == nullptr) {
@@ -91,20 +105,21 @@ int main(){
     if(sett.load() == saveManager::CANNOT_ACCESS)
         SDL_Fail("Cannot access to settings file");
 
+    // load user avatar file
     // TODO: create entry in settings
     const char* savepath = "assets/save.json";
     Profile p = Profile(SAVE_PATH, savepath, renderer);
     std::vector<Sprite> img = p.sprites;
     std::vector<Sprite>::iterator img_iter;
 
+    // initialize window
     SDL_ShowWindow(window);
     {
         int width, height, bbwidth, bbheight;
         SDL_GetWindowSize(window, &width, &height);
         SDL_GetWindowSizeInPixels(window, &bbwidth, &bbheight);
-#ifdef WINDOW_FLAG_OPENGL
-        SDL_Log("Using OpenGL window flag");
-#endif
+        if(opengl)
+            SDL_Log("Using OpenGL window flag");
         SDL_Log("Window size: %ix%i", width, height);
         SDL_Log("Backbuffer size: %ix%i", bbwidth, bbheight);
         if (width != bbwidth){
@@ -112,44 +127,49 @@ int main(){
         }
     }
 
-
     SDL_Log("Application started successfully!");
 
-    //TODO: transform to other class
+    // audio initialization
+    // TODO: transform to other class
     const SDL_AudioSpec recSpec = {SDL_AUDIO_S16LE, 2, 44100};
     auto stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_CAPTURE, &recSpec, arc, nullptr);
     SDL_ResumeAudioDevice(SDL_GetAudioStreamDevice(stream));
 
-    float barW = 700; // mic level width
-
+    // initialize some timers
+    // rewrite in future
     Uint64 vtimer = SDL_GetTicks();
     Uint64 btimer = SDL_GetTicks();
     Uint64 vDelay = sett.getEntry("voiceDelayMs");; // voice anim delay
     Uint64 bDelay = sett.getEntry("blinkDelayMs"); // blink anim delay
 
-    Uint64 animTimer = SDL_GetTicks();
-    Uint64 animTick = 15;
-
+    // rect for mic slider
+    float barW = 700; // width for active volume and width for rect
     SDL_FRect fq;
     fq.x = 10;
     fq.y = 16;
     fq.h = 16;
     fq.w = barW;
 
+    // initialize volume slider
     slider volMeter;
     volMeter.assets_in(slider::Rot::horizontal, fq);
 
+    // random for blinking
     std::random_device rd;  // a seed source for the random number engine
     std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
     std::uniform_int_distribution<> distrib(0, 10);
 
+    // TODO: create frames changing
+    // bool talking = false;
+    // bool blinking = false;
+
     int ts = 1;
     int bs = 1;
 
+    // set value for mic slider from save file
     volMeter.setValue(sett.getEntry("micSensitivity"), 8000);
 
     bool focusedWindow = true;
-
     while (!app_quit) {
 
         SDL_Event event;
@@ -182,9 +202,13 @@ int main(){
         float micVal = volMeter.getValue(8000);
         sett.setEntry("micSensitivity", micVal);
 
+
+
         for (img_iter = img.begin(); img_iter != img.end(); ++img_iter) {
             Sprite a = *img_iter;
-
+            Uint64 dTime = SDL_GetTicks() / 20;
+            Uint64 animationStep = 1000;
+            auto dt = static_cast<float>(dTime % animationStep);
             // talk
             if(volume > micVal) // configure mic sensitivity
                 ts = 2;
@@ -206,28 +230,45 @@ int main(){
             }
             a.setActiveBlinkState(bs);
 
-            if((animTimer + animTick) <= SDL_GetTicks()) {
-                int ax = a.getX() + (a.getX()*a.fa[0]);
-                int ay = a.getY() + (a.getY()*a.fa[2])*2;
-                a.setPos(ax, ay);
-            }
+            // *** here i'm trying to animate sprites
+            float x = a.rect.x;
+            float y = a.rect.y;
 
+            float xfreq = a.fa[0];
+            float xamp = a.fa[2] / a.scale;
+            float xvel =  dt * xfreq;
+            float xsinVel = std::sin(xvel * M_PIf * 2);
+
+            float yfreq = a.fa[1];
+            float yamp = -a.fa[3] / a.scale;
+            float yvel =  dt * yfreq;
+            float ysinVel = std::sin(yvel * M_PIf * 2);
+
+            x += xsinVel / a.scale;
+            y += ysinVel / a.scale;
+            a.setPos(x, y);
+            // here i'm trying to animate sprites ***
+
+            // render sprite
             a.render();
         }
 
-        SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-        SDL_RenderFillRect(renderer, &fq);
-
+        // render some objects if window is focused
         if(focusedWindow) {
+            SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+            SDL_RenderFillRect(renderer, &fq);
             volMeter.Render(renderer, false);
         }
 
         SDL_RenderPresent(renderer);
     }
 
+    // unload all
     volMeter.assets_out();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+
+    // quit from app
     SDL_Quit();
     SDL_Log("Application quit successfully!");
 
